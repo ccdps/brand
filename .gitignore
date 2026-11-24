@@ -1,0 +1,3 @@
+fonts/*.ttf
+fonts/*.otf
+!fonts/Figtree-700.ttf
