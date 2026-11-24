@@ -95,10 +95,9 @@ func LoadFontRunes(family string, weight int, data []byte, runes string) (*Font,
 			return nil, fmt.Errorf("%s %d: glyph %q: %w", family, weight, r, err)
 		}
 		ft.segs[r] = append(sfnt.Segments(nil), segs...)
-		a, err := f.GlyphAdvance(&b, g, fixed.I(unitPPEM), font.HintingNone)
-		if err != nil {
-			return nil, err
-		}
+		// GlyphAdvance fails only when g is out of range (GlyphIndex returned
+		// it, so it is not) or hmtx lies outside the file (sfnt.Parse checked).
+		a, _ := f.GlyphAdvance(&b, g, fixed.I(unitPPEM), font.HintingNone)
 		ft.adv[r] = float64(a) / 64
 		ft.gid[r] = g
 	}

@@ -71,6 +71,9 @@ func measure(o measureOpts, w io.Writer) error {
 	}
 	fmt.Fprintf(w, "image %dx%d, Otsu %d\n", wm.W, wm.H, wm.Threshold)
 	t := wm.Tile
+	if t == nil {
+		return fmt.Errorf("no tile found left of the letters in %s", o.lockup)
+	}
 	fmt.Fprintf(w, "tile: x %d..%d (w %d), y %d..%d (h %d), area %d\n", t.MinX, t.MaxX, t.Width(), t.MinY, t.MaxY, t.Height(), t.Area)
 	fmt.Fprintf(w, "letters: rows %d..%d\n", wm.LetterTop, wm.LetterB)
 	fmt.Fprintf(w, "baseline text: x %d..%d, rows %d..%d (cap height %d)\n", wm.SmallMinX, wm.SmallMaxX, wm.SmallTop, wm.SmallBot, wm.SmallBot-wm.SmallTop+1)

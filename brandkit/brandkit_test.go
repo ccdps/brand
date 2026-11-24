@@ -93,16 +93,9 @@ func TestCheckFailsOnDamage(t *testing.T) {
 
 func mustPNG(t *testing.T, k *Kit, n int) []byte {
 	t.Helper()
-	sc, err := k.Mark(0, 3)
-	if err != nil {
-		t.Fatal(err)
-	}
+	sc := k.Mark(0, StrokeWidth)
 	v, _ := VariantByName("white")
-	b, err := EncodePNG(sc.Raster(v, Canvas{W: n, H: n, Scale: float64(n) / TileSize}))
-	if err != nil {
-		t.Fatal(err)
-	}
-	return b
+	return EncodePNG(sc.Raster(v, Canvas{W: n, H: n, Scale: float64(n) / TileSize}))
 }
 
 func copyDir(t *testing.T, from, to string) {
@@ -126,7 +119,7 @@ func copyDir(t *testing.T, from, to string) {
 // the same SVG paths by logofit (the one that measured 0.974 IoU on the original).
 func TestMarkRasterMatchesStrokeRender(t *testing.T) {
 	k := newKit(t)
-	sc, _ := k.Mark(TileRadius, StrokeWidth)
+	sc := k.Mark(TileRadius, StrokeWidth)
 	v, _ := VariantByName("colour")
 	img := sc.Raster(v, Canvas{W: 256, H: 256, Scale: 1, Supersamp: 4})
 	want := logofit.Render(sc.Strokes, logofit.Affine{Sx: 1, Sy: 1}, 256, 256, 4)
@@ -151,7 +144,7 @@ func TestMarkRasterMatchesStrokeRender(t *testing.T) {
 
 func TestKnockoutCutsTheStrokes(t *testing.T) {
 	k := newKit(t)
-	sc, _ := k.Mark(TileRadius, StrokeWidth)
+	sc := k.Mark(TileRadius, StrokeWidth)
 	v, _ := VariantByName("white")
 	img := sc.Raster(v, Canvas{W: 256, H: 256, Scale: 1})
 	// (47,150) is on the left vertical stroke (x 47, width 8): transparent;
@@ -169,10 +162,7 @@ func TestKnockoutCutsTheStrokes(t *testing.T) {
 
 func TestSVGHasNoTextAndOutlinesTheWordmark(t *testing.T) {
 	k := newKit(t)
-	l, err := k.Lockup(StrokeWidth)
-	if err != nil {
-		t.Fatal(err)
-	}
+	l := k.Lockup(StrokeWidth)
 	for _, v := range Variants {
 		s := l.SVG(v)
 		if strings.Contains(s, "<text") || !strings.Contains(s, `<path fill="`) {
@@ -190,10 +180,7 @@ func TestSVGHasNoTextAndOutlinesTheWordmark(t *testing.T) {
 
 func TestBaselineIsJustifiedToTheWordmarkAndPlacedAsMeasured(t *testing.T) {
 	k := newKit(t)
-	l, err := k.Lockup(StrokeWidth)
-	if err != nil {
-		t.Fatal(err)
-	}
+	l := k.Lockup(StrokeWidth)
 	wx0, _, wx1, _ := l.Word.Bounds()
 	bx0, by0, bx1, by1 := l.Base.Bounds()
 	wl, wr := l.WordAff.Ox+l.WordAff.Sx*wx0, l.WordAff.Ox+l.WordAff.Sx*wx1
@@ -218,7 +205,7 @@ func TestBaselineIsJustifiedToTheWordmarkAndPlacedAsMeasured(t *testing.T) {
 			t.Errorf("%s: want wordmark and baseline paths", v.Name)
 		}
 	}
-	m, _ := k.Mark(TileRadius, StrokeWidth)
+	m := k.Mark(TileRadius, StrokeWidth)
 	if m.Base != nil || strings.Count(m.SVG(Variants[0]), `<path fill="`) != 0 {
 		t.Error("pictogram carries text")
 	}
@@ -269,6 +256,10 @@ func TestNewRejectsBadSources(t *testing.T) {
 	ttf, _ := os.ReadFile("../fonts/Figtree-700.ttf")
 	if _, err := New("<svg/>", ttf); err == nil {
 		t.Error("svg without stroke-width accepted")
+	}
+	// has a path but no stroke-width="8": only the stroke-width guard refuses it
+	if _, err := New(`<svg stroke-width="3"><path d="M0 0 H1"/></svg>`, ttf); err == nil {
+		t.Error("svg without stroke-width 8 accepted")
 	}
 	if _, err := New(`<svg stroke-width="8"/>`, ttf); err == nil {
 		t.Error("svg without paths accepted")

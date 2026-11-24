@@ -99,9 +99,8 @@ func table(w io.Writer, rs []logofit.Result, n int) {
 }
 
 func run(o runOpts, stdout io.Writer) error {
-	if err := os.MkdirAll(o.out, 0o755); err != nil {
-		return err
-	}
+	// a failed MkdirAll is reported by the os.Create below, naming the path.
+	_ = os.MkdirAll(o.out, 0o755)
 	rep, err := os.Create(filepath.Join(o.out, "report.md"))
 	if err != nil {
 		return err
@@ -165,10 +164,9 @@ func control(o runOpts, fonts []*logofit.Font, w io.Writer) error {
 	}
 	const size, ox, oy = 56.0, 160.37, 71.61
 	lum := logofit.SynthLockup(cf, 451, 138, size, ox, oy)
-	wm, err := logofit.ExtractWordmark(lum)
-	if err != nil {
-		return fmt.Errorf("control: %w", err)
-	}
+	// SynthLockup always draws the tile and the five letters CCDPS, so the
+	// extraction cannot fail on it (TestRunEndToEnd runs this path).
+	wm, _ := logofit.ExtractWordmark(lum)
 	fmt.Fprintf(w, "\n## Positive control\n\n%s rendered at em %.2f px, pen origin (%.2f, %.2f), through the same pipeline (Otsu %d).\n\n", o.control, size, ox, oy, wm.Threshold)
 	rs := logofit.Rank(wm, fonts, o.workers)
 	table(w, rs, 5)

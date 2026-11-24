@@ -80,8 +80,8 @@ func VariantByName(n string) (Variant, bool) {
 // Kit holds the sources.
 type Kit struct {
 	font  *logofit.Font
-	svg   string   // the v3 mark SVG text
-	paths []string // its path data
+	paths []string                     // path data of the v3 mark SVG
+	cuts  map[float64]*logofit.Strokes // stroked shape per stroke width (StrokeWidth, SmallStroke)
 }
 
 var rePath = regexp.MustCompile(`<path d="([^"]+)"/>`)
@@ -99,10 +99,18 @@ func New(markSVG string, figtree []byte) (*Kit, error) {
 	for _, m := range rePath.FindAllStringSubmatch(markSVG, -1) {
 		ps = append(ps, m[1])
 	}
-	if len(ps) == 0 {
-		return nil, fmt.Errorf("mark svg: no <path d=...>")
+	// Parse both cuts now, so that nothing after New can fail. A document
+	// with no path is refused here too (ParseSVGStrokes: "no paths"), so no
+	// separate len(ps) == 0 guard is needed.
+	cuts := map[float64]*logofit.Strokes{}
+	for _, w := range []float64{StrokeWidth, SmallStroke} {
+		s, err := logofit.ParseSVGStrokes(strings.Replace(markSVG, `stroke-width="8"`, `stroke-width="`+num(w)+`"`, 1), "mark")
+		if err != nil {
+			return nil, err
+		}
+		cuts[w] = s
 	}
-	return &Kit{font: f, svg: markSVG, paths: ps}, nil
+	return &Kit{font: f, paths: ps, cuts: cuts}, nil
 }
 
 // Scene is the geometry of one artwork.
@@ -122,25 +130,21 @@ type Scene struct {
 	BaseTrack, CapUnits float64
 }
 
-func (k *Kit) strokes(w float64) (*logofit.Strokes, error) {
-	return logofit.ParseSVGStrokes(strings.Replace(k.svg, `stroke-width="8"`, `stroke-width="`+num(w)+`"`, 1), "mark")
+// Mark is the pictogram: a 256 x 256 tile with its strokes. strokeW must be
+// StrokeWidth or SmallStroke, the two cuts New prepared; anything else is a
+// programming error.
+func (k *Kit) Mark(radius, strokeW float64) *Scene {
+	s, ok := k.cuts[strokeW]
+	if !ok {
+		panic(fmt.Sprintf("brandkit: no stroke cut of width %v", strokeW))
+	}
+	return &Scene{W: TileSize, H: TileSize, Radius: radius, StrokeW: strokeW, Strokes: s, paths: k.paths}
 }
 
-// Mark is the pictogram: a 256 x 256 tile with its strokes.
-func (k *Kit) Mark(radius, strokeW float64) (*Scene, error) {
-	s, err := k.strokes(strokeW)
-	if err != nil {
-		return nil, err
-	}
-	return &Scene{W: TileSize, H: TileSize, Radius: radius, StrokeW: strokeW, Strokes: s, paths: k.paths}, nil
-}
-
-// Lockup is the pictogram followed by the wordmark, vertically centred on the tile.
-func (k *Kit) Lockup(strokeW float64) (*Scene, error) {
-	sc, err := k.Mark(TileRadius, strokeW)
-	if err != nil {
-		return nil, err
-	}
+// Lockup is the pictogram, the wordmark at its measured baseline and the
+// baseline text under it.
+func (k *Kit) Lockup(strokeW float64) *Scene {
+	sc := k.Mark(TileRadius, strokeW)
 	run := k.font.RunTracked(WordString, WordTrack)
 	x0, _, x1, _ := run.Bounds()
 	s := WordEm / logofit.UnitsPerEm
@@ -162,7 +166,7 @@ func (k *Kit) Lockup(strokeW float64) (*Scene, error) {
 	sc.BaseTrack = track / logofit.UnitsPerEm
 	_, ey0, _, ey1 := k.font.Run("E").Bounds()
 	sc.CapUnits = bs * (ey1 - ey0)
-	return sc, nil
+	return sc
 }
 
 // num formats v with at most two decimals and no trailing zeros.

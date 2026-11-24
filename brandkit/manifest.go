@@ -22,7 +22,7 @@ type Entry struct {
 	Kind string // svg, png, ico, json
 	W, H int    // expected pixel size (png); 0 otherwise
 	ICO  []int  // sizes inside an ico
-	gen  func(k *Kit) ([]byte, error)
+	gen  func(k *Kit) []byte
 }
 
 func strokeFor(px int) float64 {
@@ -37,27 +37,19 @@ func lockupH(w int, lw float64) int {
 	return int(math.Round(float64(w) * TileSize / lw))
 }
 
-func svgEntry(name string, sc func(k *Kit) (*Scene, error), v Variant) Entry {
-	return Entry{Name: name, Kind: "svg", gen: func(k *Kit) ([]byte, error) {
-		s, err := sc(k)
-		if err != nil {
-			return nil, err
-		}
-		return []byte(s.SVG(v)), nil
+func svgEntry(name string, sc func(k *Kit) *Scene, v Variant) Entry {
+	return Entry{Name: name, Kind: "svg", gen: func(k *Kit) []byte {
+		return []byte(sc(k).SVG(v))
 	}}
 }
 
 func pngEntry(name string, w, h int, radius float64, v Variant, lockup bool) Entry {
-	return Entry{Name: name, Kind: "png", W: w, H: h, gen: func(k *Kit) ([]byte, error) {
+	return Entry{Name: name, Kind: "png", W: w, H: h, gen: func(k *Kit) []byte {
 		var s *Scene
-		var err error
 		if lockup {
-			s, err = k.Lockup(strokeFor(w))
+			s = k.Lockup(strokeFor(w))
 		} else {
-			s, err = k.Mark(radius, strokeFor(w))
-		}
-		if err != nil {
-			return nil, err
+			s = k.Mark(radius, strokeFor(w))
 		}
 		return EncodePNG(s.Raster(v, Canvas{W: w, H: h, Scale: float64(w) / s.W}))
 	}}
@@ -65,21 +57,18 @@ func pngEntry(name string, w, h int, radius float64, v Variant, lockup bool) Ent
 
 // Manifest lists every file the generator writes. It needs the lockup width,
 // so it takes the Kit.
-func (k *Kit) Manifest() ([]Entry, error) {
-	l, err := k.Lockup(StrokeWidth)
-	if err != nil {
-		return nil, err
-	}
+func (k *Kit) Manifest() []Entry {
+	l := k.Lockup(StrokeWidth)
 	colour, _ := VariantByName("colour")
 	inverse, _ := VariantByName("inverse")
 	var es []Entry
 	for _, v := range Variants {
 		v := v
 		es = append(es,
-			svgEntry("mark-"+v.Name+".svg", func(k *Kit) (*Scene, error) { return k.Mark(TileRadius, StrokeWidth) }, v),
-			svgEntry("lockup-horizontal-"+v.Name+".svg", func(k *Kit) (*Scene, error) { return k.Lockup(StrokeWidth) }, v))
+			svgEntry("mark-"+v.Name+".svg", func(k *Kit) *Scene { return k.Mark(TileRadius, StrokeWidth) }, v),
+			svgEntry("lockup-horizontal-"+v.Name+".svg", func(k *Kit) *Scene { return k.Lockup(StrokeWidth) }, v))
 	}
-	es = append(es, svgEntry("favicon.svg", func(k *Kit) (*Scene, error) { return k.Mark(TileRadius, SmallStroke) }, colour))
+	es = append(es, svgEntry("favicon.svg", func(k *Kit) *Scene { return k.Mark(TileRadius, SmallStroke) }, colour))
 	for _, s := range []int{16, 32, 64, 128, 256, 512, 1024} {
 		es = append(es, pngEntry(fmt.Sprintf("mark-%d.png", s), s, s, TileRadius, colour, false))
 	}
@@ -94,33 +83,27 @@ func (k *Kit) Manifest() ([]Entry, error) {
 			pngEntry(fmt.Sprintf("lockup-colour-%d.png", w), w, lockupH(w, l.W), 0, colour, true),
 			pngEntry(fmt.Sprintf("lockup-inverse-%d.png", w), w, lockupH(w, l.W), 0, inverse, true))
 	}
-	es = append(es, Entry{Name: "social-banner-1280x640.png", Kind: "png", W: 1280, H: 640, gen: func(k *Kit) ([]byte, error) {
-		s, err := k.Lockup(StrokeWidth)
-		if err != nil {
-			return nil, err
-		}
+	es = append(es, Entry{Name: "social-banner-1280x640.png", Kind: "png", W: 1280, H: 640, gen: func(k *Kit) []byte {
+		s := k.Lockup(StrokeWidth)
 		const lw = 720.0
 		sc := lw / s.W
 		return EncodePNG(s.Raster(inverse, Canvas{W: 1280, H: 640, Scale: sc, Ox: (1280 - lw) / 2, Oy: (640 - TileSize*sc) / 2, Bg: InkHex}))
 	}})
-	es = append(es, Entry{Name: "favicon.ico", Kind: "ico", ICO: []int{16, 32, 48}, gen: func(k *Kit) ([]byte, error) {
+	es = append(es, Entry{Name: "favicon.ico", Kind: "ico", ICO: []int{16, 32, 48}, gen: func(k *Kit) []byte {
 		var ps [][]byte
 		sizes := []int{16, 32, 48}
 		for _, s := range sizes {
-			sc, err := k.Mark(TileRadius, strokeFor(s))
-			if err != nil {
-				return nil, err
-			}
-			p, err := EncodePNG(sc.Raster(colour, Canvas{W: s, H: s, Scale: float64(s) / TileSize}))
-			if err != nil {
-				return nil, err
-			}
-			ps = append(ps, p)
+			sc := k.Mark(TileRadius, strokeFor(s))
+			ps = append(ps, EncodePNG(sc.Raster(colour, Canvas{W: s, H: s, Scale: float64(s) / TileSize})))
 		}
-		return ICO(ps, sizes)
+		b, err := ICO(ps, sizes)
+		if err != nil {
+			panic(err) // the sizes above are constants inside ICO's range
+		}
+		return b
 	}})
-	es = append(es, Entry{Name: "tokens.json", Kind: "json", gen: func(k *Kit) ([]byte, error) { return k.tokens() }})
-	return es, nil
+	es = append(es, Entry{Name: "tokens.json", Kind: "json", gen: func(k *Kit) []byte { return k.tokens() }})
+	return es
 }
 
 // MinCapPx is the smallest baseline cap height (px) at which the baseline
@@ -141,11 +124,8 @@ type tokenDoc struct {
 	Rules     map[string]string  `json:"rules"`
 }
 
-func (k *Kit) tokens() ([]byte, error) {
-	l, err := k.Lockup(StrokeWidth)
-	if err != nil {
-		return nil, err
-	}
+func (k *Kit) tokens() []byte {
+	l := k.Lockup(StrokeWidth)
 	d := tokenDoc{
 		Colour: map[string]string{"ink": InkHex, "paper": PaperHex, "black": BlackHex},
 		Geometry: map[string]float64{
@@ -162,29 +142,18 @@ func (k *Kit) tokens() ([]byte, error) {
 			"smallCut":   "rasters of 48 px and below use stroke width 10 instead of 8",
 		},
 	}
-	b, err := json.MarshalIndent(d, "", "  ")
-	if err != nil {
-		return nil, err
-	}
-	return append(b, '\n'), nil
+	b, _ := json.MarshalIndent(d, "", "  ") // maps of strings and numbers cannot fail
+	return append(b, '\n')
 }
 
 // Generate writes every entry into dir and returns the names written.
 func (k *Kit) Generate(dir string) ([]string, error) {
-	es, err := k.Manifest()
-	if err != nil {
-		return nil, err
-	}
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return nil, err
-	}
+	// A failure to make dir is not checked here: the first WriteFile below
+	// fails for the same reason and reports it.
+	_ = os.MkdirAll(dir, 0o755)
 	var names []string
-	for _, e := range es {
-		data, err := e.gen(k)
-		if err != nil {
-			return nil, fmt.Errorf("%s: %w", e.Name, err)
-		}
-		if err := os.WriteFile(filepath.Join(dir, e.Name), data, 0o644); err != nil {
+	for _, e := range k.Manifest() {
+		if err := os.WriteFile(filepath.Join(dir, e.Name), e.gen(k), 0o644); err != nil {
 			return nil, err
 		}
 		names = append(names, e.Name)
@@ -203,11 +172,7 @@ const MaxPixelDiff = 3
 // the files there byte for byte and PNGs must agree to MaxPixelDiff.
 func (k *Kit) Check(dir, against string) []string {
 	var bad []string
-	es, err := k.Manifest()
-	if err != nil {
-		return []string{err.Error()}
-	}
-	for _, e := range es {
+	for _, e := range k.Manifest() {
 		p := filepath.Join(dir, e.Name)
 		data, err := os.ReadFile(p)
 		if err != nil {
@@ -328,9 +293,6 @@ func pixelDiff(name string, a, b []byte) []string {
 }
 
 func toNRGBA(i image.Image) *image.NRGBA {
-	if n, ok := i.(*image.NRGBA); ok {
-		return n
-	}
 	b := i.Bounds()
 	n := image.NewNRGBA(b)
 	for y := b.Min.Y; y < b.Max.Y; y++ {

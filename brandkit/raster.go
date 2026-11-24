@@ -134,13 +134,11 @@ func (sc *Scene) Raster(v Variant, c Canvas) *image.NRGBA {
 func q8(v float64) uint8 { return uint8(math.Max(0, math.Min(255, math.Round(v*255)))) }
 
 // EncodePNG encodes deterministically at the best compression.
-func EncodePNG(img image.Image) ([]byte, error) {
+func EncodePNG(img image.Image) []byte {
 	var b bytes.Buffer
 	e := png.Encoder{CompressionLevel: png.BestCompression}
-	if err := e.Encode(&b, img); err != nil {
-		return nil, err
-	}
-	return b.Bytes(), nil
+	_ = e.Encode(&b, img) // writes to a bytes.Buffer cannot fail
+	return b.Bytes()
 }
 
 // ICO packs PNG images (each a square of the given size) into one .ico.

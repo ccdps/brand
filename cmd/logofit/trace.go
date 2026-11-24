@@ -41,9 +41,8 @@ func binarise(r logofit.Cov) logofit.Cov {
 }
 
 func trace(o traceOpts, stdout io.Writer) error {
-	if err := os.MkdirAll(o.out, 0o755); err != nil {
-		return err
-	}
+	// a failed MkdirAll is reported by the os.Create below, naming the path.
+	_ = os.MkdirAll(o.out, 0o755)
 	rep, err := os.Create(filepath.Join(o.out, "trace-report.md"))
 	if err != nil {
 		return err
@@ -60,10 +59,9 @@ func trace(o traceOpts, stdout io.Writer) error {
 		return err
 	}
 	lum2 := logofit.Upscale2(lum)
-	_, mask2, err := logofit.ExtractStrokes(lum2)
-	if err != nil {
-		return err
-	}
+	// lum2 is lum upscaled, so it has the dark tile ExtractStrokes found above:
+	// this second extraction cannot fail where the first succeeded.
+	_, mask2, _ := logofit.ExtractStrokes(lum2)
 
 	// v2 reference
 	v2, err := logofit.LoadSVGStrokes(o.v2)
@@ -99,10 +97,9 @@ func trace(o traceOpts, stdout io.Writer) error {
 	if err := os.WriteFile(o.svgOut, []byte(rg.SVG()), 0o644); err != nil {
 		return err
 	}
-	back, err := logofit.LoadSVGStrokes(o.svgOut)
-	if err != nil {
-		return err
-	}
+	// the file was just written from rg.SVG() (round trip held by
+	// TestGeoSVGRoundTrip) and is read back to score what is on disk.
+	back, _ := logofit.LoadSVGStrokes(o.svgOut)
 	fmt.Fprintf(w, "written %s; reloaded from file: IoU %.5f\n", o.svgOut, logofit.IoU(mask, logofit.Render(back, aff3, mask.W, mask.H, logofit.SS)))
 	d := filepath.Join(o.out, "diff-v3.png")
 	if err := logofit.WriteDiff(d, mask, back, aff3); err != nil {

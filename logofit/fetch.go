@@ -71,10 +71,14 @@ func get(c *http.Client, u string) ([]byte, error) {
 // Fetch downloads every candidate into dir and writes dir/SOURCES.md
 // (licence, source URL, SHA-256, variable-font flag, failures).
 func Fetch(dir string, log io.Writer) error {
+	return fetchFrom(&http.Client{Timeout: 60 * time.Second}, "https://fonts.googleapis.com/css2", dir, log)
+}
+
+// fetchFrom is Fetch against the CSS endpoint cssBase with client c.
+func fetchFrom(c *http.Client, cssBase, dir string, log io.Writer) error {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
-	c := &http.Client{Timeout: 60 * time.Second}
 	var md bytes.Buffer
 	md.WriteString("# Font sources\n\nAll families are Google Fonts, licensed under the SIL Open Font License 1.1\n" +
 		"(licence taken from the Google Fonts catalogue, not re-read from each file's name table).\n" +
@@ -84,7 +88,7 @@ func Fetch(dir string, log io.Writer) error {
 	for _, fam := range Families {
 		for _, w := range Weights {
 			name := FontFile(fam, w)
-			cssURL := fmt.Sprintf("https://fonts.googleapis.com/css2?family=%s:wght@%d", url.QueryEscape(fam), w)
+			cssURL := fmt.Sprintf("%s?family=%s:wght@%d", cssBase, url.QueryEscape(fam), w)
 			css, err := get(c, cssURL)
 			if err != nil {
 				failed = append(failed, fmt.Sprintf("%s %d: css %v", fam, w, err))
