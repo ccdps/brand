@@ -1,0 +1,34 @@
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version: "1.27.4"
+          cache: true
+      - name: gofmt
+        run: test -z "$(gofmt -l .)"
+      - run: go vet ./...
+      - run: go test ./...
+      - name: govulncheck
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.10.0 ./...
+      - name: kit regenerates (pixel tolerance for FMA differences between CPUs)
+        run: |
+          go run ./cmd/brandkit generate --out "$RUNNER_TEMP/kit"
+          go run ./cmd/brandkit check --dir kit --against "$RUNNER_TEMP/kit"
+      - name: no file of 1 MiB or more, no original capture
+        run: |
+          test -z "$(find . -path ./.git -prune -o -type f -size +1023k -print)"
+          test ! -e testdata/lockup.png && test ! -e testdata/mark.png

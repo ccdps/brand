@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="512" height="512">
+  <rect width="256" height="256" fill="#fff"/>
+  <rect x="0" y="0" width="256" height="238" rx="20" fill="#141414"/>
+  <g fill="none" stroke="#fff" stroke-width="7" stroke-linejoin="miter" stroke-linecap="butt">
+    <!-- base -->
+    <path d="M42 185 H212"/>
+    <!-- left low building + narrow tower -->
+    <path d="M45 185 V111 L88 93 H112 V185"/>
+    <path d="M88 93 V185"/>
+    <!-- back building roof: left stub, rise to the peak, shoulder -->
+    <path d="M61 96 V80 L131 45 L162 60 V77"/>
+    <!-- tall tower edge from the peak -->
+    <path d="M131 45 V185"/>
+    <!-- right building -->
+    <path d="M168 185 V77 L210 94 V185"/>
+  </g>
+</svg>
